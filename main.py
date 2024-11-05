@@ -6,7 +6,6 @@ import tkinter as tk
 from tkinter import filedialog, messagebox, ttk
 from mutagen import File
 from PIL import Image, ImageTk
-from time import sleep
 
 class MusicPlayer:
     def __init__(self, master):
@@ -21,6 +20,7 @@ class MusicPlayer:
         self.duration = 0
         pygame.mixer.init()
         self.setup_ui()
+        self.master.protocol("WM_DELETE_WINDOW", self.stop_player)
 
     def setup_ui(self):
         self.master.columnconfigure(0, weight=1)
@@ -28,47 +28,72 @@ class MusicPlayer:
         self.master.columnconfigure(2, weight=1)
         self.master.rowconfigure(0, weight=1)
         self.master.rowconfigure(1, weight=0)
+        
         self.playlist_frame = ttk.Frame(self.master)
         self.playlist_frame.grid(row=0, column=0, padx=10, pady=10, sticky="nsew")
+        
         self.playlist_box = tk.Listbox(self.playlist_frame, selectmode=tk.SINGLE, width=50)
         self.playlist_box.pack(padx=20, fill=tk.BOTH, expand=True)
+        
         self.loop_mode_var = tk.StringVar(value="No Loop")
         self.loop_options = ["No Loop", "Single Loop", "Loop All"]
         self.loop_dropdown = ttk.Combobox(self.playlist_frame, textvariable=self.loop_mode_var, values=self.loop_options, state="readonly")
         self.loop_dropdown.pack(pady=5)
+        
         self.current_time_label = tk.Label(self.playlist_frame, text="00:00:00")
         self.current_time_label.pack(side=tk.LEFT, padx=5)
+        
+        self.slash = tk.Label(self.playlist_frame, text="/")
+        self.slash.pack(side=tk.LEFT)
+        
         self.duration_label = tk.Label(self.playlist_frame, text="00:00:00")
-        self.duration_label.pack(side=tk.RIGHT, padx=5)
-        self.current_time_slider = tk.Scale(self.playlist_frame, from_=0, to=100, orient=tk.HORIZONTAL, state='disabled', length=400)
-        self.current_time_slider.pack(pady=10, fill=tk.X)
-        self.current_time_slider.bind("<Motion>", self.seek_song)
+        self.duration_label.pack(side=tk.LEFT, padx=5)
+        
         self.control_frame = ttk.Frame(self.master)
         self.control_frame.grid(row=1, column=0, padx=10, pady=10, sticky="ew")
+        
         for i in range(8):
             self.control_frame.columnconfigure(i, weight=1)
+        
         self.play_button = ttk.Button(self.control_frame, text="Play", command=self.play_song, width=15)
         self.play_button.grid(row=0, column=0, padx=5, pady=5)
+        
         self.pause_button = ttk.Button(self.control_frame, text="Pause", command=self.pause_song, width=15)
         self.pause_button.grid(row=0, column=1, padx=5, pady=5)
+        
         self.stop_button = ttk.Button(self.control_frame, text="Stop", command=self.stop_song, width=15)
         self.stop_button.grid(row=0, column=2, padx=5, pady=5)
+        
         self.prev_button = ttk.Button(self.control_frame, text="Previous", command=self.previous_song, width=15)
         self.prev_button.grid(row=0, column=3, padx=5, pady=5)
+        
         self.next_button = ttk.Button(self.control_frame, text="Next", command=self.next_song, width=15)
         self.next_button.grid(row=0, column=4, padx=5, pady=5)
+        
         self.remove_button = ttk.Button(self.control_frame, text="Remove", command=self.remove_song, width=15)
         self.remove_button.grid(row=0, column=5, padx=5, pady=5)
+        
         self.shuffle_button = ttk.Button(self.control_frame, text="Shuffle", command=self.shuffle_playlist, width=15)
         self.shuffle_button.grid(row=0, column=6, padx=5, pady=5)
+        
         self.load_button = ttk.Button(self.control_frame, text="Load Songs", command=self.load_songs, width=15)
         self.load_button.grid(row=0, column=7, padx=5, pady=5)
+        
         self.metadata_frame = ttk.Frame(self.master)
         self.metadata_frame.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
+        
         self.artwork_label = ttk.Label(self.metadata_frame)
         self.artwork_label.pack(pady=10)
+        
         self.metadata_text = tk.Text(self.metadata_frame, width=40, height=15, wrap=tk.WORD, state=tk.DISABLED)
         self.metadata_text.pack(pady=5)
+
+    def stop_player(self):
+        """Handle application close to prevent errors."""
+        self.is_playing = False
+        pygame.mixer.music.stop()
+        pygame.mixer.quit()
+        self.master.destroy()
 
     def load_songs(self):
         song_files = filedialog.askopenfilenames(title="Select Music Files", filetypes=[("All Music Files", "*.mp3;*.wav;*.ogg;*.flac")])
@@ -94,39 +119,31 @@ class MusicPlayer:
         self.play_selected_song()
 
     def play_selected_song(self):
-        threading.Thread(target=self._play_song).start()
+        if not self.is_playing:  # Avoid starting a new thread if already playing
+            threading.Thread(target=self._play_song).start()
 
     def _play_song(self):
         pygame.mixer.music.load(self.song_to_play)  # Load the song
         self.duration = self.get_song_duration()  # Get song duration
-        self.current_time_slider.config(to=self.duration, state='normal')  # Enable slider and set maximum value
         self.duration_label.config(text=self.format_time(self.duration))  # Set the duration label
 
         self.is_playing = True
         pygame.mixer.music.play()  # Play the song
+        self.schedule_time_update()  # Start periodic updates for time labels
 
-        while pygame.mixer.music.get_busy():  # Wait until the song is done
-            self.update_slider()  # Update slider position
-            if not self.is_playing:
-                pygame.mixer.music.stop()  # Stop playing if the state is not playing
-                return
-            sleep(1)  # Sleep for a second to control the update rate
+    def schedule_time_update(self):
+        """Schedules periodic updates to the time labels."""
+        if self.is_playing and pygame.mixer.music.get_busy():  # Check if song is still playing
+            self.update_time_labels()
+            self.master.after(1000, self.schedule_time_update)  # Schedule the next update in 1 second
+        else:
+            self.is_playing = False
+            self.next_song()  # Move to the next song if available
 
-        self.is_playing = False
-        self.current_time_slider.config(state='disabled')  # Disable slider after playback
-        self.next_song()
-
-    def update_slider(self):
-        current_position = pygame.mixer.music.get_pos() / 1000  # Get current position in seconds
-        self.current_time_slider.set(current_position)  # Update slider
-        self.current_time_label.config(text=self.format_time(current_position))  # Update current time label
-
-    def seek_song(self, event):
+    def update_time_labels(self):
         if self.is_playing:
-            pygame.mixer.music.pause()
-            seek_time = self.current_time_slider.get()
-            pygame.mixer.music.set_pos(seek_time)
-            pygame.mixer.music.unpause()
+            current_position = pygame.mixer.music.get_pos() / 1000  # Get current position in seconds
+            self.current_time_label.config(text=self.format_time(current_position))  # Update current time label
 
     def format_time(self, seconds):
         hours = int(seconds // 3600)
@@ -187,30 +204,19 @@ class MusicPlayer:
         name = audio.tags.get('TIT2').text[0] if audio.tags and 'TIT2' in audio.tags else "Unknown"
         artist = audio.tags.get('TPE1').text[0] if audio.tags and 'TPE1' in audio.tags else "Unknown"
         album = audio.tags.get('TALB').text[0] if audio.tags and 'TALB' in audio.tags else "Unknown"
-        genre = audio.tags.get('TCON').text[0] if audio.tags and 'TCON' in audio.tags else "Unknown"
-        sample_rate = audio.info.sample_rate if audio.info.sample_rate else "Unknown"
-        duration = audio.info.length if audio.info.length else "Unknown"
-        duration_str = f"{int(duration // 3600):02}:{int((duration % 3600) // 60):02}:{int(duration % 60):02}" if audio.info.length else "Unknown"
-        self.metadata_text.insert(tk.END, f"Name: {name}\n")
-        self.metadata_text.insert(tk.END, f"Artist: {artist}\n")
-        self.metadata_text.insert(tk.END, f"Album: {album}\n")
-        self.metadata_text.insert(tk.END, f"Genre: {genre}\n")
-        self.metadata_text.insert(tk.END, f"Sample rate: {sample_rate}\n")
-        self.metadata_text.insert(tk.END, f"Duration: {duration_str}\n")
+        year = audio.tags.get('TDRC').text[0] if audio.tags and 'TDRC' in audio.tags else "Unknown"
+        self.metadata_text.insert(tk.END, f"Title: {name}\nArtist: {artist}\nAlbum: {album}\nYear: {year}")
         self.metadata_text.config(state=tk.DISABLED)
-        artwork_data = None
+        self.display_artwork(song_path)
+
+    def display_artwork(self, song_path):
+        audio = File(song_path)
         if audio.tags and 'APIC:' in audio.tags:
-            if isinstance(audio.tags['APIC:'], list):
-                artwork_data = audio.tags['APIC:'][0].data
-            else:
-                artwork_data = audio.tags['APIC:'].data
-        if artwork_data:
-            from io import BytesIO
-            image = Image.open(BytesIO(artwork_data))
-            image.thumbnail((150, 150))
-            photo = ImageTk.PhotoImage(image)
-            self.artwork_label.config(image=photo)
-            self.artwork_label.image = photo
+            artwork_data = audio.tags['APIC:'].data
+            image = Image.open(io.BytesIO(artwork_data))
+            image = image.resize((200, 200), Image.ANTIALIAS)
+            self.artwork = ImageTk.PhotoImage(image)
+            self.artwork_label.config(image=self.artwork)
         else:
             self.artwork_label.config(image='')
 
