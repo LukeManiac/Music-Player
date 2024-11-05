@@ -17,6 +17,7 @@ class MusicPlayer:
         self.playlist = []
         self.current_song_index = 0
         self.is_playing = False
+        self.paused = False  # New attribute to track paused state
         self.loop_mode = "No Loop"
         self.duration = 0
         pygame.mixer.init()
@@ -111,8 +112,15 @@ class MusicPlayer:
         if not selected_song:
             messagebox.showwarning("Warning", "Select a song to play.")
             return
-        if self.is_playing:
+
+        # If the song is paused, resume playback instead of restarting
+        if self.paused:
+            pygame.mixer.music.unpause()
+            self.is_playing = True
+            self.paused = False
             return
+
+        # Set the current song index if playing for the first time or switching songs
         self.current_song_index = selected_song[0]
         self.song_to_play = self.playlist[self.current_song_index]
         self.loop_mode = self.loop_mode_var.get().lower().replace(" ", "_")
@@ -129,6 +137,7 @@ class MusicPlayer:
         self.duration_label.config(text=self.format_time(self.duration))  # Set the duration label
 
         self.is_playing = True
+        self.paused = False  # Reset pause state when a new song starts
         pygame.mixer.music.play()  # Play the song
         self.schedule_time_update()  # Start periodic updates for time labels
 
@@ -160,9 +169,11 @@ class MusicPlayer:
         if self.is_playing:
             pygame.mixer.music.pause()
             self.is_playing = False
+            self.paused = True  # Set paused state
 
     def stop_song(self):
         self.is_playing = False
+        self.paused = False  # Reset paused state when stopped
         pygame.mixer.music.stop()
 
     def previous_song(self):
@@ -202,24 +213,23 @@ class MusicPlayer:
         self.metadata_text.config(state=tk.NORMAL)
         self.metadata_text.delete(1.0, tk.END)
         audio = File(song_path)
-        name = audio.tags.get('TIT2').text[0] if audio.tags and 'TIT2' in audio.tags else "Unknown"
-        artist = audio.tags.get('TPE1').text[0] if audio.tags and 'TPE1' in audio.tags else "Unknown"
-        album = audio.tags.get('TALB').text[0] if audio.tags and 'TALB' in audio.tags else "Unknown"
-        year = audio.tags.get('TDRC').text[0] if audio.tags and 'TDRC' in audio.tags else "Unknown"
-        self.metadata_text.insert(tk.END, f"Title: {name}\nArtist: {artist}\nAlbum: {album}\nYear: {year}")
+        for key, value in audio.tags.items():
+            self.metadata_text.insert(tk.END, f"{key}: {value}\n")
         self.metadata_text.config(state=tk.DISABLED)
         self.display_artwork(song_path)
 
     def display_artwork(self, song_path):
         audio = File(song_path)
-        if audio.tags and 'APIC:' in audio.tags:
-            artwork_data = audio.tags['APIC:'].data
-            image = Image.open(get_img_data(artwork_data))
-            image = image.resize((200, 200), Image.LANCZOS)
-            self.artwork = ImageTk.PhotoImage(image)
-            self.artwork_label.config(image=self.artwork)
+        if 'APIC:' in audio.tags:
+            artwork = audio.tags['APIC:'].data
+            img_data = get_img_data(artwork)
+            image = Image.open(img_data)
+            image = image.resize((200, 200), Image.ANTIALIAS)
+            photo = ImageTk.PhotoImage(image)
+            self.artwork_label.config(image=photo)
+            self.artwork_label.image = photo
         else:
-            self.artwork_label.config(image='')
+            self.artwork_label.config(image=None)
 
 if __name__ == "__main__":
     root = tk.Tk()
