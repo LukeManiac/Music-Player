@@ -3,6 +3,7 @@ import threading
 import pygame
 import random
 import tkinter as tk
+from io import BytesIO as get_img_data
 from tkinter import filedialog, messagebox, ttk
 from mutagen import File
 from PIL import Image, ImageTk
@@ -213,8 +214,8 @@ class MusicPlayer:
         audio = File(song_path)
         if audio.tags and 'APIC:' in audio.tags:
             artwork_data = audio.tags['APIC:'].data
-            image = Image.open(io.BytesIO(artwork_data))
-            image = image.resize((200, 200), Image.ANTIALIAS)
+            image = Image.open(get_img_data(artwork_data))
+            image = image.resize((200, 200), Image.LANCZOS)
             self.artwork = ImageTk.PhotoImage(image)
             self.artwork_label.config(image=self.artwork)
         else:
