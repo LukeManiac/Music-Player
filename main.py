@@ -12,8 +12,8 @@ class MusicPlayer:
     def __init__(self, master):
         self.master = master
         self.master.title("Music Player")
-        self.master.geometry("1000x640")
-        self.master.minsize(1000, 640)
+        self.master.geometry("720x640")
+        self.master.minsize(720,640)
         self.playlist = []
         self.current_song_index = 0
         self.is_playing = False
@@ -80,15 +80,6 @@ class MusicPlayer:
         
         self.load_button = ttk.Button(self.control_frame, text="Load Songs", command=self.load_songs, width=15)
         self.load_button.grid(row=0, column=7, padx=5, pady=5)
-        
-        self.metadata_frame = ttk.Frame(self.master)
-        self.metadata_frame.grid(row=0, column=2, padx=10, pady=10, sticky="nsew")
-        
-        self.artwork_label = ttk.Label(self.metadata_frame)
-        self.artwork_label.pack(pady=10)
-        
-        self.metadata_text = tk.Text(self.metadata_frame, width=40, height=15, wrap=tk.WORD, state=tk.DISABLED)
-        self.metadata_text.pack(pady=5)
 
     def stop_player(self):
         """Handle application close to prevent errors."""
@@ -124,7 +115,6 @@ class MusicPlayer:
         self.current_song_index = selected_song[0]
         self.song_to_play = self.playlist[self.current_song_index]
         self.loop_mode = self.loop_mode_var.get().lower().replace(" ", "_")
-        self.display_metadata(self.song_to_play)
         self.play_selected_song()
 
     def play_selected_song(self):
@@ -208,28 +198,6 @@ class MusicPlayer:
             song_index = selected_song[0]
             del self.playlist[song_index]
             self.playlist_box.delete(song_index)
-
-    def display_metadata(self, song_path):
-        self.metadata_text.config(state=tk.NORMAL)
-        self.metadata_text.delete(1.0, tk.END)
-        audio = File(song_path)
-        for key, value in audio.tags.items():
-            self.metadata_text.insert(tk.END, f"{key}: {value}\n")
-        self.metadata_text.config(state=tk.DISABLED)
-        self.display_artwork(song_path)
-
-    def display_artwork(self, song_path):
-        audio = File(song_path)
-        if 'APIC:' in audio.tags:
-            artwork = audio.tags['APIC:'].data
-            img_data = get_img_data(artwork)
-            image = Image.open(img_data)
-            image = image.resize((200, 200), Image.ANTIALIAS)
-            photo = ImageTk.PhotoImage(image)
-            self.artwork_label.config(image=photo)
-            self.artwork_label.image = photo
-        else:
-            self.artwork_label.config(image=None)
 
 if __name__ == "__main__":
     root = tk.Tk()
